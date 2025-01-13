@@ -1,5 +1,6 @@
 import axios from 'axios';
 
+// API base URL
 const API_URL = 'https://wccback.vercel.app/api';
 
 // Configure axios defaults
@@ -8,10 +9,14 @@ axios.defaults.withCredentials = true;
 
 // Intercept responses to handle token expiration
 axios.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('Axios Response:', response);
+    return response;
+  },
   (error) => {
+    console.error('Axios Error Response:', error.response);
     if (error.response?.status === 401) {
-      // Token expired or invalid
+      console.warn('Token expired or invalid. Logging out...');
       logout();
       window.location.href = '/signin';
     }
@@ -19,36 +24,28 @@ axios.interceptors.response.use(
   }
 );
 
+// Function to register a user
 export const register = async (formData) => {
   try {
-    const { username, name, email, password, year, class: userClass, branch, mobile } = formData;
-    
-    const response = await axios.post(`${API_URL}/auth/register`, {
-      username,
-      name,
-      email,
-      password,
-      year,
-      class: userClass,
-      branch,
-      mobile
-    });
+    console.log('Registering user with data:', formData);
+    const response = await axios.post(`${API_URL}/auth/register`, formData);
+
+    console.log('Registration Response:', response.data);
 
     if (response.data.success) {
       const { token, user } = response.data;
-      // Store token securely
       localStorage.setItem('token', token);
-      // Store user data without sensitive info
       const safeUserData = { ...user };
       delete safeUserData.password;
       localStorage.setItem('userData', JSON.stringify(safeUserData));
-      // Set auth header
       setAuthHeader(token);
       return { token, user: safeUserData };
     } else {
+      console.error('Registration failed:', response.data.message);
       throw new Error(response.data.message || 'Registration failed');
     }
   } catch (error) {
+    console.error('Error during registration:', error);
     if (error.response?.data) {
       throw new Error(error.response.data.message || 'Registration failed');
     }
@@ -56,28 +53,28 @@ export const register = async (formData) => {
   }
 };
 
+// Function to log in a user
 export const login = async (email, password) => {
   try {
-    const response = await axios.post(`${API_URL}/auth/login`, {
-      email,
-      password
-    });
+    console.log('Logging in with email:', email);
+    const response = await axios.post(`${API_URL}/auth/login`, { email, password });
+
+    console.log('Login Response:', response.data);
 
     if (response.data.success) {
       const { token, user } = response.data;
-      // Store token securely
       localStorage.setItem('token', token);
-      // Store user data without sensitive info
       const safeUserData = { ...user };
       delete safeUserData.password;
       localStorage.setItem('userData', JSON.stringify(safeUserData));
-      // Set auth header
       setAuthHeader(token);
       return { token, user: safeUserData };
     } else {
+      console.error('Login failed:', response.data.message);
       throw new Error(response.data.message || 'Login failed');
     }
   } catch (error) {
+    console.error('Error during login:', error);
     if (error.response?.data) {
       throw new Error(error.response.data.message || 'Login failed');
     }
@@ -85,53 +82,67 @@ export const login = async (email, password) => {
   }
 };
 
+// Function to log out a user
 export const logout = () => {
-  // Clear all auth related data
+  console.log('Logging out...');
   localStorage.removeItem('token');
   localStorage.removeItem('userData');
-  // Clear any other sensitive data
   sessionStorage.clear();
-  // Remove auth header
   delete axios.defaults.headers.common['Authorization'];
 };
 
+// Function to get the current user
 export const getCurrentUser = () => {
+  console.log('Getting current user...');
   const token = localStorage.getItem('token');
-  if (!token) return null;
-  
+  if (!token) {
+    console.warn('No token found. User is not authenticated.');
+    return null;
+  }
+
   try {
-    // Decode the JWT token
+    console.log('Decoding token...');
     const base64Url = token.split('.')[1];
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-    }).join(''));
-
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
     const userData = JSON.parse(jsonPayload);
-    
-    // Check token expiration
+
     if (userData.exp && userData.exp * 1000 < Date.now()) {
+      console.warn('Token has expired.');
       logout();
       return null;
     }
 
+    console.log('Current user data:', userData);
     return { user: userData, token };
   } catch (error) {
     console.error('Error decoding token:', error);
+    logout();
     return null;
   }
 };
 
+// Function to check if the user is authenticated
 export const isAuthenticated = () => {
+  console.log('Checking if user is authenticated...');
   const user = getCurrentUser();
-  return !!user;
+  const isAuth = !!user;
+  console.log('Is user authenticated?', isAuth);
+  return isAuth;
 };
 
 // Add auth header to all requests
 export const setAuthHeader = (token) => {
   if (token) {
+    console.log('Setting Authorization header...');
     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
   } else {
+    console.log('Removing Authorization header...');
     delete axios.defaults.headers.common['Authorization'];
   }
-}; 
+};
