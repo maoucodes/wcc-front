@@ -77,11 +77,11 @@ const SignUp = () => {
       return;
     }
 
-    console.log(import.meta.env.VITE_RAZORPAY_KEY_ID)
+    console.log("razorpay", import.meta.env.VITE_RAZORPAY_KEY_ID)
 
     const options = {
       key: import.meta.env.VITE_RAZORPAY_KEY_ID,
-      amount: "1000", // Amount in paise (10 rupees = 1000 paise)
+      amount: "500", // Amount in paise (10 rupees = 1000 paise)
       currency: "INR",
       name: "WeCodeCrunchers",
       description: "Community Membership Registration",
