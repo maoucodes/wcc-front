@@ -3,24 +3,6 @@ import { useNavigate, Link } from "react-router-dom";
 import { FiLock, FiMail, FiUser, FiPhone } from "react-icons/fi";
 import { register } from "../services/auth";
 import { useAuth } from "../context/AuthContext";
-import { useState, useEffect } from "react"; // useEffect was missing
-
-// Logger utility
-const logger = {
-  info: (message, data) => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[INFO] ${message}`, data);
-    }
-  },
-  error: (message, error) => {
-    console.error(`[ERROR] ${message}`, error);
-    // You can integrate with error tracking services here
-    // e.g., Sentry, LogRocket, etc.
-  },
-  warning: (message, data) => {
-    console.warn(`[WARNING] ${message}`, data);
-  }
-};
 
 const SignUp = () => {
   const [formData, setFormData] = useState({
@@ -37,246 +19,123 @@ const SignUp = () => {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
-  const [paymentInitiated, setPaymentInitiated] = useState(false);
 
   const navigate = useNavigate();
   const { updateUser } = useAuth();
 
   const handleChange = (e) => {
     if (e.target.name === "mobile") {
+      // Only allow numbers and limit to 10 digits
       const value = e.target.value.replace(/\D/g, "").slice(0, 10);
       setFormData({ ...formData, mobile: value });
     } else {
       setFormData({ ...formData, [e.target.name]: e.target.value });
     }
-    logger.info('Form field updated', { field: e.target.name });
   };
 
   const loadRazorpay = () => {
-    logger.info('Loading Razorpay SDK');
     return new Promise((resolve) => {
       const script = document.createElement('script');
       script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      
       script.onload = () => {
-        logger.info('Razorpay SDK loaded successfully');
         resolve(true);
       };
-      
       script.onerror = () => {
-        logger.error('Failed to load Razorpay SDK');
         resolve(false);
       };
-      
       document.body.appendChild(script);
     });
   };
 
   const handlePaymentSuccess = async (response, userData) => {
-    logger.info('Payment success callback initiated', { paymentId: response?.razorpay_payment_id });
-    
     try {
-      if (!response || !response.razorpay_payment_id) {
-        throw new Error("Invalid payment response");
-      }
-
       if (!userData) {
         throw new Error("No user data found");
       }
 
-      // Add payment details to user data
-      const userDataWithPayment = {
-        ...userData,
-        paymentId: response.razorpay_payment_id,
-        paymentTimestamp: new Date().toISOString()
-      };
-
-      logger.info('Attempting user registration with payment details', {
-        paymentId: response.razorpay_payment_id,
-        email: userData.email
-      });
-
       // Register user after successful payment
-      const data = await register(userDataWithPayment);
-      
-      if (!data || !data.user) {
-        throw new Error("Invalid registration response");
-      }
-
-      logger.info('User registration successful', { userId: data.user.id });
-
-      // Update user context
+      const data = await register(userData);
       updateUser(data.user);
-      
-      // Ensure Razorpay modal is closed
-      if (window.Razorpay && window.Razorpay.close) {
-        window.Razorpay.close();
-        logger.info('Razorpay modal closed');
-      }
-
-      // Show success overlay and redirect
       setShowSuccessOverlay(true);
       setTimeout(() => {
         setShowSuccessOverlay(false);
         navigate("/signin");
       }, 2000);
-
     } catch (error) {
-      logger.error('Error in payment success handler:', error);
+      console.error("Error in payment success handler:", error);
       setError("Failed to complete registration. Please try again.");
-      
-      // Ensure modal is closed even on error
-      if (window.Razorpay && window.Razorpay.close) {
-        window.Razorpay.close();
-      }
     } finally {
       setIsLoading(false);
-      setPaymentInitiated(false);
     }
   };
 
   const handlePayment = async (userData) => {
-    logger.info('Initiating payment process', { email: userData.email });
-    
-    try {
-      const res = await loadRazorpay();
+    const res = await loadRazorpay();
 
-      if (!res) {
-        throw new Error('Razorpay SDK failed to load');
-      }
-
-      if (!import.meta.env.VITE_RAZORPAY_KEY_ID) {
-        throw new Error('Razorpay key not found');
-      }
-
-      setPaymentInitiated(true);
-
-      const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID,
-        amount: "500",
-        currency: "INR",
-        name: "WeCodeCrunchers",
-        description: "Community Membership Registration",
-        image: "your_logo_url",
-        handler: function (response) {
-          handlePaymentSuccess(response, userData);
-        },
-        prefill: {
-          name: userData.name,
-          email: userData.email,
-          contact: userData.mobile ? `+91${userData.mobile}` : '',
-        },
-        theme: {
-          color: "#3B82F6"
-        },
-        modal: {
-          ondismiss: function() {
-            logger.info('Payment modal dismissed');
-            setIsLoading(false);
-            setPaymentInitiated(false);
-            setError("Payment cancelled. Please try again.");
-            // Ensure modal is closed
-            if (window.Razorpay && window.Razorpay.close) {
-              window.Razorpay.close();
-            }
-          },
-          escape: true,
-          animation: true
-        }
-      };
-
-      logger.info('Creating Razorpay instance');
-      const paymentObject = new window.Razorpay(options);
-      
-      // Add event listeners for payment flow
-      paymentObject.on('payment.failed', function(response) {
-        logger.error('Payment failed', response.error);
-        setError(`Payment failed: ${response.error.description}`);
-        setIsLoading(false);
-        setPaymentInitiated(false);
-      });
-
-      // Open payment modal
-      paymentObject.open();
-      logger.info('Payment modal opened');
-
-    } catch (error) {
-      logger.error('Error in payment initialization:', error);
-      setError(error.message || "Failed to initialize payment. Please try again.");
-      setIsLoading(false);
-      setPaymentInitiated(false);
+    if (!res) {
+      alert('Razorpay SDK failed to load. Please check your connection.');
+      return;
     }
+
+    console.log("razorpay", import.meta.env.VITE_RAZORPAY_KEY_ID)
+
+    const options = {
+      key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+      amount: "500", // Amount in paise (10 rupees = 1000 paise)
+      currency: "INR",
+      name: "WeCodeCrunchers",
+      description: "Community Membership Registration",
+      image: "your_logo_url",
+      handler: function (response) {
+        handlePaymentSuccess(response, userData);
+      },
+      prefill: {
+        name: userData.name,
+        email: userData.email,
+        contact: userData.mobile ? `+91${userData.mobile}` : '',
+      },
+      theme: {
+        color: "#3B82F6"
+      },
+      modal: {
+        ondismiss: function() {
+          setIsLoading(false);
+          setError("Payment cancelled. Please try again.");
+        }
+      }
+    };
+
+    const paymentObject = new window.Razorpay(options);
+    paymentObject.open();
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    logger.info('Form submission initiated');
-
-    if (paymentInitiated) {
-      logger.warning('Payment already in progress');
-      return;
-    }
-
     setIsLoading(true);
     setError("");
 
+    // Check if passwords match
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match");
+      setIsLoading(false);
+      return;
+    }
+
+    // Check password length
+    if (formData.password.length < 6) {
+      setError("Password must be at least 6 characters long");
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      // Validation checks
-      if (formData.password !== formData.confirmPassword) {
-        throw new Error("Passwords do not match");
-      }
-
-      if (formData.password.length < 6) {
-        throw new Error("Password must be at least 6 characters long");
-      }
-
-      // Validate email format
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(formData.email)) {
-        throw new Error("Please enter a valid email address");
-      }
-
-      // Validate mobile number
-      if (formData.mobile.length !== 10) {
-        throw new Error("Please enter a valid 10-digit mobile number");
-      }
-
-      logger.info('Form validation passed, initiating payment');
+      // Pass the form data directly to handlePayment
       await handlePayment(formData);
-
     } catch (error) {
-      logger.error('Form submission error:', error);
       setError(error.message || "Registration failed. Please try again.");
       setIsLoading(false);
     }
   };
-
-  // Payment timeout handler
-  useEffect(() => {
-    let timeoutId;
-    
-    if (paymentInitiated) {
-      timeoutId = setTimeout(() => {
-        if (paymentInitiated) {
-          logger.warning('Payment timeout reached');
-          setPaymentInitiated(false);
-          setIsLoading(false);
-          setError("Payment timeout. Please try again.");
-          
-          // Attempt to close Razorpay modal
-          if (window.Razorpay && window.Razorpay.close) {
-            window.Razorpay.close();
-          }
-        }
-      }, 300000); // 5 minute timeout
-    }
-
-    return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-    };
-  }, [paymentInitiated]);
 
   return (
     <div className="min-h-screen flex items-center justify-center">
