@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = 'https://wccback.vercel.app/api';
 
 export const AUTH_ENDPOINTS = {
     REGISTER: `${API_URL}/auth/register`,
